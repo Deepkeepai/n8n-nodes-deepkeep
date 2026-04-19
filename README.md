@@ -76,4 +76,4 @@ See the sibling `n8n-deepkeep/` folder in the source repository for a Docker Com
 
 - DeepKeep documentation: https://deepkeep.ai
 - Issues: please file on this repository
-- Contact: support@deepkeep.ai
+- Contact: contact@deepkeep.ai
