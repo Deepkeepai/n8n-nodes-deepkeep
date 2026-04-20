@@ -19,10 +19,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gilarel/n8n-nodes-deepkeep.git"
+    "url": "git+https://github.com/Deepkeepai/n8n-nodes-deepkeep.git"
   },
   "bugs": {
-    "url": "https://github.com/gilarel/n8n-nodes-deepkeep/issues"
+    "url": "https://github.com/Deepkeepai/n8n-nodes-deepkeep/issues"
   },
   "main": "index.js",
   "scripts": {
