@@ -301,19 +301,54 @@ export class DeepKeep implements INodeType {
         const credentials = await this.getCredentials('deepKeepApi');
         const baseURL = `https://api.${credentials.subDomain}.deepkeep.ai/api`;
 
-        const response = await this.helpers.httpRequestWithAuthentication.call(
-          this,
-          'deepKeepApi',
-          {
-            method: 'POST',
-            url: `${baseURL}/v2/firewalls/search`,
-            qs: { page: 1, size: 100 },
-            body: { query: [] },
-            json: true,
-          },
-        );
+        // Send body as a literal JSON string with json:false. This avoids the
+        // axios/n8n quirk where an object body with an empty array can be
+        // mis-serialized or dropped — the same bug class we hit on
+        // "Create conversation."
+        const doRequest = async (): Promise<unknown> =>
+          this.helpers.httpRequestWithAuthentication.call(
+            this,
+            'deepKeepApi',
+            {
+              method: 'POST',
+              url: `${baseURL}/v2/firewalls/search`,
+              qs: { page: 1, size: 100 },
+              headers: { 'Content-Type': 'application/json' },
+              body: '{"query":[]}',
+              json: false,
+            },
+          );
 
-        const items = (response?.data ?? []) as Array<{
+        // Retry once on 429 — DeepKeep firewalls can briefly cold-start.
+        let raw: unknown;
+        try {
+          raw = await doRequest();
+        } catch (error) {
+          const status =
+            (error as { httpCode?: number; response?: { status?: number } })
+              ?.httpCode ??
+            (error as { httpCode?: number; response?: { status?: number } })
+              ?.response?.status;
+          if (status === 429) {
+            await new Promise((r) => setTimeout(r, 1500));
+            try {
+              raw = await doRequest();
+            } catch {
+              throw new Error(
+                'DeepKeep is rate-limited or warming up. Try again in a moment.',
+              );
+            }
+          } else {
+            throw new Error(
+              `Could not list firewalls: ${(error as Error).message}`,
+            );
+          }
+        }
+
+        const response =
+          typeof raw === 'string' ? JSON.parse(raw) : (raw as IDataObject);
+
+        const items = ((response as { data?: unknown[] })?.data ?? []) as Array<{
           id: string;
           name: string;
         }>;
