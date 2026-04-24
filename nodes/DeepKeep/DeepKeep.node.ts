@@ -5,12 +5,13 @@ import {
   INodePropertyOptions,
   INodeType,
   INodeTypeDescription,
+  NodeApiError,
   NodeOperationError,
 } from 'n8n-workflow';
 import type {
   IDataObject,
   IHttpRequestMethods,
-  NodeConnectionType,
+  JsonObject,
 } from 'n8n-workflow';
 
 /**
@@ -319,7 +320,8 @@ export class DeepKeep implements INodeType {
             },
           );
 
-        // Retry once on 429 — DeepKeep firewalls can briefly cold-start.
+        // Single attempt: n8n re-invokes loadOptions when the dropdown is
+        // reopened, so a cold-start 429 just asks the user to try again.
         let raw: unknown;
         try {
           raw = await doRequest();
@@ -330,21 +332,15 @@ export class DeepKeep implements INodeType {
             (error as { httpCode?: number; response?: { status?: number } })
               ?.response?.status;
           if (status === 429) {
-            await new Promise((r) => setTimeout(r, 1500));
-            try {
-              raw = await doRequest();
-            } catch {
-              throw new NodeOperationError(
-                this.getNode(),
-                'DeepKeep is rate-limited or warming up. Try again in a moment.',
-              );
-            }
-          } else {
             throw new NodeOperationError(
               this.getNode(),
-              `Could not list firewalls: ${(error as Error).message}`,
+              'DeepKeep is rate-limited or warming up. Reopen the dropdown to retry.',
             );
           }
+          throw new NodeOperationError(
+            this.getNode(),
+            `Could not list firewalls: ${(error as Error).message}`,
+          );
         }
 
         const response =
@@ -552,24 +548,34 @@ export class DeepKeep implements INodeType {
           (error as { httpCode?: number; response?: { status?: number } })
             ?.response?.status;
 
-        const friendlyError =
-          statusCode === 429
-            ? new NodeOperationError(
-                this.getNode(),
-                'Too many requests. Check if the rate limit is exceeded, or if the firewall is warming up.',
-                { itemIndex: i },
-              )
-            : error;
+        let wrappedError;
+        if (statusCode === 429) {
+          wrappedError = new NodeOperationError(
+            this.getNode(),
+            'Too many requests. Check if the rate limit is exceeded, or if the firewall is warming up.',
+            { itemIndex: i },
+          );
+        } else if (
+          error instanceof NodeApiError ||
+          error instanceof NodeOperationError
+        ) {
+          wrappedError = error;
+        } else {
+          // Wrap raw HTTP errors so n8n's UI surfaces status code and body.
+          wrappedError = new NodeApiError(this.getNode(), error as JsonObject, {
+            itemIndex: i,
+          });
+        }
 
         if (this.continueOnFail()) {
           returnData.push({
-            json: { error: (friendlyError as Error).message },
+            json: { error: (wrappedError as Error).message },
             pairedItem: { item: i },
           });
           continue;
         }
 
-        throw friendlyError;
+        throw wrappedError;
       }
     }
 

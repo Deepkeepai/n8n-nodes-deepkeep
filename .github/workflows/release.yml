@@ -1,0 +1,41 @@
+name: Release
+
+# Publishes to npm with provenance whenever a version tag (vX.Y.Z) is pushed.
+# Required GitHub repo secret: NPM_TOKEN (granular token with read+write on
+# n8n-nodes-deepkeep, "Bypass 2FA" enabled).
+# The id-token permission is required by npm provenance (OIDC).
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
