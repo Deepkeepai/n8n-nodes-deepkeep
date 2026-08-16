@@ -1,8 +1,6 @@
 import {
   IExecuteFunctions,
-  ILoadOptionsFunctions,
   INodeExecutionData,
-  INodePropertyOptions,
   INodeType,
   INodeTypeDescription,
   NodeApiError,
@@ -17,15 +15,8 @@ import type {
 /**
  * DeepKeep n8n community node.
  *
- * Structure mirrors the Make.com app:
- *   Resource: "Firewall Conversation"
- *   Operations:
- *     - Check input          (POST /v2/firewalls/{firewallId}/conversation/{conversationId}/check_user_input)
- *     - Create conversation  (POST /v2/firewalls/{firewallId}/conversation)
- *     - Make API call        (arbitrary authorized request — user-provided path, method, headers, qs, body)
- *
- * Add new operations by extending the `operation` options list and the
- * switch block in execute().
+ * Uses the same OpenAI-compatible moderation endpoints as the LangChain
+ * integration and keeps an arbitrary authorized API call escape hatch.
  */
 export class DeepKeep implements INodeType {
   description: INodeTypeDescription = {
@@ -48,7 +39,6 @@ export class DeepKeep implements INodeType {
       },
     ],
     properties: [
-      // --- Resource selector ---
       {
         displayName: 'Resource',
         name: 'resource',
@@ -56,34 +46,32 @@ export class DeepKeep implements INodeType {
         noDataExpression: true,
         options: [
           {
-            name: 'Firewall Conversation',
-            value: 'firewallConversation',
+            name: 'Moderation',
+            value: 'moderation',
           },
         ],
-        default: 'firewallConversation',
+        default: 'moderation',
       },
-
-      // --- Operation selector ---
       {
         displayName: 'Operation',
         name: 'operation',
         type: 'options',
         noDataExpression: true,
         displayOptions: {
-          show: { resource: ['firewallConversation'] },
+          show: { resource: ['moderation'] },
         },
         options: [
           {
-            name: 'Check Input',
-            value: 'checkInput',
-            description: 'Check prompt against defined guardrails',
-            action: 'Check prompt against defined guardrails',
+            name: 'Pre Moderation',
+            value: 'preModeration',
+            description: 'Check model input against DeepKeep guardrails',
+            action: 'Check model input against deep keep guardrails',
           },
           {
-            name: 'Create Conversation',
-            value: 'createConversation',
-            description: 'Create a new conversation in a firewall',
-            action: 'Create a new conversation in a firewall',
+            name: 'Post Moderation',
+            value: 'postModeration',
+            description: 'Check model output against DeepKeep guardrails',
+            action: 'Check model output against deep keep guardrails',
           },
           {
             name: 'Make API Call',
@@ -92,87 +80,90 @@ export class DeepKeep implements INodeType {
             action: 'Perform an arbitrary authorized API call',
           },
         ],
-        default: 'checkInput',
+        default: 'preModeration',
       },
-
-      // --- Shared field: Firewall (used by Check input + Create conversation) ---
       {
-        displayName: 'Firewall Name or ID',
-        name: 'firewallId',
-        type: 'options',
-        typeOptions: {
-          loadOptionsMethod: 'listFirewalls',
-        },
-        required: true,
-        default: '',
-        description:
-          'The Firewall containing the guardrails. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
-        displayOptions: {
-          show: {
-            resource: ['firewallConversation'],
-            operation: ['checkInput', 'createConversation'],
-          },
-        },
-      },
-
-      // --- Fields for "Check input" only ---
-      {
-        displayName: 'Conversation ID',
-        name: 'conversationId',
+        displayName: 'Model',
+        name: 'model',
         type: 'string',
         required: true,
         default: '',
-        description: 'The ID of the Conversation',
+        description: 'DeepKeep firewall ID to send as the OpenAI-compatible model field',
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
-            operation: ['checkInput'],
+            resource: ['moderation'],
+            operation: ['preModeration', 'postModeration'],
           },
         },
       },
       {
-        displayName: 'Content',
-        name: 'content',
+        displayName: 'Input',
+        name: 'input',
         type: 'string',
         required: true,
         default: '',
         typeOptions: { rows: 4 },
-        description: 'The text content to be checked by the firewall',
+        description: 'The input text to check before sending it to a model',
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
-            operation: ['checkInput'],
+            resource: ['moderation'],
+            operation: ['preModeration'],
           },
         },
       },
       {
-        displayName: 'Return Full Response (Enable Logs)',
-        name: 'logs',
-        type: 'boolean',
-        default: false,
-        description:
-          'Whether to log the request and return <b>all</b> detected violations in the response. When disabled, the response may include only the primary violation. Enable this for audit, debugging, or when you need the complete violation list.',
+        displayName: 'Output',
+        name: 'output',
+        type: 'string',
+        required: true,
+        default: '',
+        typeOptions: { rows: 4 },
+        description: 'The model output text to check before returning it downstream',
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
-            operation: ['checkInput'],
+            resource: ['moderation'],
+            operation: ['postModeration'],
           },
         },
       },
-
-      // --- Fields for "Make API call" only ---
+      {
+        displayName: 'Title',
+        name: 'title',
+        type: 'string',
+        default: '',
+        description: 'Optional request title sent to DeepKeep',
+        displayOptions: {
+          show: {
+            resource: ['moderation'],
+            operation: ['preModeration', 'postModeration'],
+          },
+        },
+      },
+      {
+        displayName: 'Chat',
+        name: 'chat',
+        type: 'string',
+        default: '',
+        description: 'Optional chat identifier or context sent to DeepKeep',
+        displayOptions: {
+          show: {
+            resource: ['moderation'],
+            operation: ['preModeration', 'postModeration'],
+          },
+        },
+      },
       {
         displayName: 'URL',
         name: 'url',
         type: 'string',
         required: true,
         default: '',
-        placeholder: '/v2/firewalls',
+        placeholder: '/api/v3/openai/moderations/pre',
         description:
-          'Enter the part of the URL that comes after <code>deepkeep.ai/api</code>. For example, <code>/v2/firewalls</code>.',
+          'Enter the path relative to the configured DeepKeep base URL. For example, <code>/api/v3/openai/moderations/pre</code>.',
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
+            resource: ['moderation'],
             operation: ['makeApiCall'],
           },
         },
@@ -184,14 +175,15 @@ export class DeepKeep implements INodeType {
         required: true,
         default: 'GET',
         options: [
+          { name: 'DELETE', value: 'DELETE' },
           { name: 'GET', value: 'GET' },
+          { name: 'PATCH', value: 'PATCH' },
           { name: 'POST', value: 'POST' },
           { name: 'PUT', value: 'PUT' },
-          { name: 'DELETE', value: 'DELETE' },
         ],
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
+            resource: ['moderation'],
             operation: ['makeApiCall'],
           },
         },
@@ -202,7 +194,7 @@ export class DeepKeep implements INodeType {
         type: 'fixedCollection',
         typeOptions: { multipleValues: true },
         placeholder: 'Add Header',
-        description: 'You don\'t have to add authorization headers; we already did that for you',
+        description: 'You do not have to add authorization headers; the DeepKeep API credentials do that automatically',
         default: {
           parameter: [{ key: 'Content-Type', value: 'application/json' }],
         },
@@ -228,7 +220,7 @@ export class DeepKeep implements INodeType {
         ],
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
+            resource: ['moderation'],
             operation: ['makeApiCall'],
           },
         },
@@ -262,7 +254,7 @@ export class DeepKeep implements INodeType {
         ],
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
+            resource: ['moderation'],
             operation: ['makeApiCall'],
           },
         },
@@ -274,10 +266,10 @@ export class DeepKeep implements INodeType {
         default: '',
         typeOptions: { rows: 5 },
         description:
-          'Raw request body. Format it yourself (usually JSON). Leave empty for methods that don\'t need a body.',
+          'Raw request body. Format it yourself (usually JSON). Leave empty for methods that do not need a body.',
         displayOptions: {
           show: {
-            resource: ['firewallConversation'],
+            resource: ['moderation'],
             operation: ['makeApiCall'],
           },
         },
@@ -285,169 +277,61 @@ export class DeepKeep implements INodeType {
     ],
   };
 
-  /**
-   * Dynamic dropdown loaders. Each method's name matches the
-   * `loadOptionsMethod` referenced in the properties above.
-   *
-   * Ports the Make.com RPC `listFirewalls`:
-   *   POST /v2/firewalls/search?page=1&size=100
-   *   body: { query: [] }
-   *   response: body.data[] -> { label: name, value: id }
-   */
-  methods = {
-    loadOptions: {
-      async listFirewalls(
-        this: ILoadOptionsFunctions,
-      ): Promise<INodePropertyOptions[]> {
-        const credentials = await this.getCredentials('deepKeepApi');
-        const baseURL = `https://api.${credentials.subDomain}.deepkeep.ai/api`;
-
-        // Send body as a literal JSON string with json:false. This avoids the
-        // axios/n8n quirk where an object body with an empty array can be
-        // mis-serialized or dropped — the same bug class we hit on
-        // "Create conversation."
-        const doRequest = async (): Promise<unknown> =>
-          this.helpers.httpRequestWithAuthentication.call(
-            this,
-            'deepKeepApi',
-            {
-              method: 'POST',
-              url: `${baseURL}/v2/firewalls/search`,
-              qs: { page: 1, size: 100 },
-              headers: { 'Content-Type': 'application/json' },
-              body: '{"query":[]}',
-              json: false,
-            },
-          );
-
-        // Single attempt: n8n re-invokes loadOptions when the dropdown is
-        // reopened, so a cold-start 429 just asks the user to try again.
-        let raw: unknown;
-        try {
-          raw = await doRequest();
-        } catch (error) {
-          const status =
-            (error as { httpCode?: number; response?: { status?: number } })
-              ?.httpCode ??
-            (error as { httpCode?: number; response?: { status?: number } })
-              ?.response?.status;
-          if (status === 429) {
-            throw new NodeOperationError(
-              this.getNode(),
-              'DeepKeep is rate-limited or warming up. Reopen the dropdown to retry.',
-            );
-          }
-          throw new NodeOperationError(
-            this.getNode(),
-            `Could not list firewalls: ${(error as Error).message}`,
-          );
-        }
-
-        const response =
-          typeof raw === 'string' ? JSON.parse(raw) : (raw as IDataObject);
-
-        const items = ((response as { data?: unknown[] })?.data ?? []) as Array<{
-          id: string;
-          name: string;
-        }>;
-
-        return items.slice(0, 100).map((firewall) => ({
-          name: firewall.name,
-          value: firewall.id,
-        }));
-      },
-    },
-  };
-
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
     const returnData: INodeExecutionData[] = [];
 
     const credentials = await this.getCredentials('deepKeepApi');
-    const baseURL = `https://api.${credentials.subDomain}.deepkeep.ai/api`;
+    const baseURL = String(credentials.baseUrl).replace(/\/+$/, '');
 
     for (let i = 0; i < items.length; i++) {
       try {
         const resource = this.getNodeParameter('resource', i) as string;
         const operation = this.getNodeParameter('operation', i) as string;
 
-        if (
-          resource === 'firewallConversation' &&
-          operation === 'checkInput'
-        ) {
-          const firewallId = this.getNodeParameter('firewallId', i) as string;
-          const conversationId = this.getNodeParameter(
-            'conversationId',
-            i,
-          ) as string;
-          const content = this.getNodeParameter('content', i) as string;
-          const logs = this.getNodeParameter('logs', i) as boolean;
+        if (resource === 'moderation' && operation === 'preModeration') {
+          const model = this.getNodeParameter('model', i) as string;
+          const input = this.getNodeParameter('input', i) as string;
+          const title = this.getNodeParameter('title', i, '') as string;
+          const chat = this.getNodeParameter('chat', i, '') as string;
 
           const response = await this.helpers.httpRequestWithAuthentication.call(
             this,
             'deepKeepApi',
             {
               method: 'POST',
-              url: `${baseURL}/v2/firewalls/${encodeURIComponent(
-                firewallId,
-              )}/conversation/${encodeURIComponent(
-                conversationId,
-              )}/check_user_input`,
-              body: { content, logs },
+              url: `${baseURL}/api/v3/openai/moderations/pre`,
+              body: { model, input, title, chat },
               json: true,
             },
           );
 
-          // Make.com wrapped the response under `results`; preserve that shape.
-          returnData.push({
-            json: { results: response },
-            pairedItem: { item: i },
-          });
-        } else if (
-          resource === 'firewallConversation' &&
-          operation === 'createConversation'
-        ) {
-          const firewallId = this.getNodeParameter('firewallId', i) as string;
-
-          // DeepKeep's /conversation endpoint requires a JSON body even when
-          // empty. Passing `body: {}` with `json: true` causes n8n/axios to
-          // drop the body, which DeepKeep then sees as `null` and rejects with
-          // 422 "Field required". Forcing a literal "{}" string with an
-          // explicit Content-Type ensures the body reaches the server.
-          const rawResponse = await this.helpers.httpRequestWithAuthentication.call(
-            this,
-            'deepKeepApi',
-            {
-              method: 'POST',
-              url: `${baseURL}/v2/firewalls/${encodeURIComponent(
-                firewallId,
-              )}/conversation`,
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: '{}',
-              json: false,
-            },
-          );
-
-          // With `json: false`, n8n returns the raw body. It may already be
-          // parsed (if axios auto-parsed based on response Content-Type), or
-          // still a JSON string — handle both.
-          const response =
-            typeof rawResponse === 'string'
-              ? JSON.parse(rawResponse)
-              : rawResponse;
-
-          // Response is passed through as-is to mirror the Make.com module
-          // ("output": "{{body}}" — no wrapping).
           returnData.push({
             json: response,
             pairedItem: { item: i },
           });
-        } else if (
-          resource === 'firewallConversation' &&
-          operation === 'makeApiCall'
-        ) {
+        } else if (resource === 'moderation' && operation === 'postModeration') {
+          const model = this.getNodeParameter('model', i) as string;
+          const output = this.getNodeParameter('output', i) as string;
+          const title = this.getNodeParameter('title', i, '') as string;
+          const chat = this.getNodeParameter('chat', i, '') as string;
+
+          const response = await this.helpers.httpRequestWithAuthentication.call(
+            this,
+            'deepKeepApi',
+            {
+              method: 'POST',
+              url: `${baseURL}/api/v3/openai/moderations/post`,
+              body: { model, output, title, chat },
+              json: true,
+            },
+          );
+
+          returnData.push({
+            json: response,
+            pairedItem: { item: i },
+          });
+        } else if (resource === 'moderation' && operation === 'makeApiCall') {
           const userUrl = this.getNodeParameter('url', i) as string;
           const method = this.getNodeParameter(
             'method',
@@ -465,11 +349,9 @@ export class DeepKeep implements INodeType {
           };
           const bodyText = this.getNodeParameter('body', i, '') as string;
 
-          // Normalize URL: strip leading slashes to avoid "/api//v2/...".
           const userPath = userUrl.replace(/^\/+/, '');
           const fullUrl = `${baseURL}/${userPath}`;
 
-          // Flatten fixedCollection arrays into plain objects.
           const headers: Record<string, string> = {};
           for (const row of headersParam.parameter ?? []) {
             if (row.key) headers[row.key] = row.value;
@@ -479,9 +361,6 @@ export class DeepKeep implements INodeType {
             if (row.key) qs[row.key] = row.value;
           }
 
-          // Build request. Use json:false so `body` is sent verbatim and the
-          // body-dropping empty-object quirk can't bite us. Only attach a
-          // body when the user actually provided one.
           const requestOptions: {
             method: IHttpRequestMethods;
             url: string;
@@ -510,19 +389,15 @@ export class DeepKeep implements INodeType {
               requestOptions,
             );
 
-          // Try to parse the response body as JSON for downstream convenience;
-          // if the response isn't JSON (e.g., text/plain or HTML), pass through
-          // as a string.
           let parsedBody: unknown = (fullResponse as { body: unknown }).body;
           if (typeof parsedBody === 'string' && parsedBody.length > 0) {
             try {
               parsedBody = JSON.parse(parsedBody);
             } catch {
-              // Not JSON — leave as string.
+              // Not JSON - leave as string.
             }
           }
 
-          // Mirror Make.com's envelope: { statusCode, headers, body }.
           returnData.push({
             json: {
               statusCode: (fullResponse as { statusCode: number }).statusCode,
@@ -541,7 +416,6 @@ export class DeepKeep implements INodeType {
           );
         }
       } catch (error) {
-        // Friendly 429 mirroring the Make.com rate-limit message.
         const statusCode =
           (error as { httpCode?: number; response?: { status?: number } })
             ?.httpCode ??
@@ -561,7 +435,6 @@ export class DeepKeep implements INodeType {
         ) {
           wrappedError = error;
         } else {
-          // Wrap raw HTTP errors so n8n's UI surfaces status code and body.
           wrappedError = new NodeApiError(this.getNode(), error as JsonObject, {
             itemIndex: i,
           });

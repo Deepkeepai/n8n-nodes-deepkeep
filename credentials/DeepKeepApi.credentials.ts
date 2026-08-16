@@ -8,11 +8,10 @@ import {
 /**
  * DeepKeep API credentials.
  *
- * Mirrors the Make.com connection:
- *  - Two fields: subDomain (plain text) + apiKey (secret, was "token" in Make).
+ * Mirrors the current OpenAI-compatible DeepKeep API integrations:
+ *  - Two fields: baseUrl (plain text) + apiKey (secret).
  *  - Auth header: X-API-Key: <apiKey> on every request.
- *  - Connection test: GET https://api.<subDomain>.deepkeep.ai/health
- *    (note: outside the /api/ prefix, by design).
+ *  - Connection test: GET <baseUrl>/health.
  */
 export class DeepKeepApi implements ICredentialType {
   name = 'deepKeepApi';
@@ -21,14 +20,14 @@ export class DeepKeepApi implements ICredentialType {
 
   properties: INodeProperties[] = [
     {
-      displayName: 'Subdomain',
-      name: 'subDomain',
+      displayName: 'Base URL',
+      name: 'baseUrl',
       type: 'string',
       default: '',
       required: true,
-      placeholder: 'acme',
+      placeholder: 'https://api.deepkeep.example',
       description:
-        'Enter the subdomain of your DeepKeep instance (https://api.&lt;subDomain&gt;.deepkeep.ai)',
+        'Enter the base URL of your DeepKeep instance, without a trailing slash',
     },
     {
       displayName: 'API Key',
@@ -60,7 +59,7 @@ export class DeepKeepApi implements ICredentialType {
    */
   test: ICredentialTestRequest = {
     request: {
-      baseURL: '=https://api.{{$credentials.subDomain}}.deepkeep.ai',
+      baseURL: '={{$credentials.baseUrl}}',
       url: '/health',
       method: 'GET',
     },
