@@ -18,8 +18,8 @@ export class DeepKeepApi implements ICredentialType {
   displayName = 'DeepKeep API';
   documentationUrl = 'https://deepkeep.ai/docs/api';
   icon = {
-    light: 'file:../nodes/DeepKeep/deepkeep.svg',
-    dark: 'file:../nodes/DeepKeep/deepkeep.svg',
+    light: 'file:../nodes/DeepKeep/deepkeep-light.svg',
+    dark: 'file:../nodes/DeepKeep/deepkeep-dark.svg',
   } as const;
 
   properties: INodeProperties[] = [

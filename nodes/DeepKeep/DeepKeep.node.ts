@@ -24,8 +24,8 @@ export class DeepKeep implements INodeType {
     displayName: 'DeepKeep',
     name: 'deepKeep',
     icon: {
-      light: 'file:deepkeep.svg',
-      dark: 'file:deepkeep.svg',
+      light: 'file:deepkeep-light.svg',
+      dark: 'file:deepkeep-dark.svg',
     },
     group: ['transform'],
     version: 1,
