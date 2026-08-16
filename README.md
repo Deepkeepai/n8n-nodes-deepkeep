@@ -2,7 +2,7 @@
 
 An [n8n](https://n8n.io) community node for the [DeepKeep](https://deepkeep.ai) AI Firewall API.
 
-Use it in your workflows to check LLM inputs and outputs against DeepKeep guardrails, create firewall conversations, and make arbitrary authorized calls to any DeepKeep API endpoint.
+Use it in your workflows to check LLM inputs and outputs against DeepKeep guardrails and make arbitrary authorized calls to any DeepKeep API endpoint.
 
 ## Installation
 
@@ -24,45 +24,67 @@ Make sure `N8N_COMMUNITY_PACKAGES_ENABLED=true` (default in recent versions), th
 
 Create a **DeepKeep API** credential with:
 
-| Field       | Value                                                                 |
-| ----------- | --------------------------------------------------------------------- |
-| Subdomain   | Your DeepKeep environment subdomain (e.g. `acme`). The base URL becomes `https://api.<subdomain>.deepkeep.ai`. |
-| API Key     | Your DeepKeep API key. Sent as the `X-API-Key` header on every request. |
+| Field    | Value                                                                 |
+| -------- | --------------------------------------------------------------------- |
+| Base URL | The base URL of your DeepKeep instance, without a trailing slash.      |
+| API Key  | Your DeepKeep API key. Sent as the `X-API-Key` header on every request. |
 
 The credential is tested against `GET /health`.
 
 ## Operations
 
-All operations live under the **Firewall Conversation** resource.
+All operations live under the **Moderation** resource.
 
-### Check input
+### Pre moderation
 
-Checks a prompt against the guardrails defined on a firewall.
+Checks model input against the guardrails defined on a DeepKeep firewall.
 
-- **Firewall** — select from the list of firewalls in your DeepKeep workspace (populated dynamically).
-- **Conversation ID** — existing conversation to append the check to.
-- **Content** — the text to check.
-- **Return Full Response (Enable Logs)** — when `false`, the API returns only the first violation; when `true`, it returns all violations. Default: `true`.
+- **Model** — DeepKeep firewall ID. Sent as the OpenAI-compatible `model` field.
+- **Input** — the text to check.
+- **Title** — optional request title.
+- **Chat** — optional chat identifier or context.
 
-Returns the wrapped response `{ results: ... }` to mirror the Make.com module.
+Calls `POST /api/v3/openai/moderations/pre` with:
 
-### Create conversation
+```json
+{"model":"input-firewall-id","input":"hello","title":"","chat":""}
+```
 
-Starts a new conversation on a firewall. Returns the raw response from the API (including the new conversation ID).
+### Post moderation
 
-- **Firewall** — select from the list.
+Checks model output against the guardrails defined on a DeepKeep firewall.
+
+- **Model** — DeepKeep firewall ID. Sent as the OpenAI-compatible `model` field.
+- **Output** — the text to check.
+- **Title** — optional request title.
+- **Chat** — optional chat identifier or context.
+
+Calls `POST /api/v3/openai/moderations/post` with:
+
+```json
+{"model":"output-firewall-id","output":"hello","title":"","chat":""}
+```
 
 ### Make API call
 
 An escape hatch that lets you call any DeepKeep endpoint with the configured credentials.
 
-- **URL** — path relative to the API base (e.g. `v2/firewalls/search`).
+- **URL** — path relative to the configured Base URL (e.g. `/api/v3/openai/moderations/pre`).
 - **Method** — `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
 - **Headers** — optional key/value rows. `Content-Type: application/json` is included by default.
 - **Query Parameters** — optional key/value rows.
 - **Body** — raw request body (usually JSON).
 
 Returns `{ statusCode, headers, body }`. `body` is parsed as JSON when possible, otherwise passed through as a string. Non-2xx responses are returned in the envelope rather than thrown.
+
+## Migration from 0.1.x
+
+Version 0.2.0 updates this node to the same OpenAI-compatible DeepKeep API calls used by the LangChain integration.
+
+- Replace the old **Subdomain** credential with **Base URL**.
+- Replace legacy conversation operations with **Pre Moderation** and **Post Moderation**.
+- Use your DeepKeep firewall ID in the **Model** field.
+- The legacy `Create Conversation` operation and conversation-based `Check Input` operation are removed.
 
 ## Local development
 
