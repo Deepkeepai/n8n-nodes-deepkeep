@@ -50,6 +50,13 @@ module.exports = {
       },
       plugins: ['eslint-plugin-n8n-nodes-base'],
       extends: ['plugin:n8n-nodes-base/nodes'],
+      rules: {
+        // The current n8n scanner requires NodeConnectionTypes.Main instead
+        // of string literals. Older eslint-plugin-n8n-nodes-base versions
+        // still enforce the previous string-literal style.
+        'n8n-nodes-base/node-class-description-inputs-wrong-regular-node': 'off',
+        'n8n-nodes-base/node-class-description-outputs-wrong': 'off',
+      },
     },
   ],
 };

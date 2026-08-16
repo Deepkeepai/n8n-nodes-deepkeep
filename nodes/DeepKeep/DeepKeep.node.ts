@@ -3,6 +3,7 @@ import {
   INodeExecutionData,
   INodeType,
   INodeTypeDescription,
+  NodeConnectionTypes,
   NodeApiError,
   NodeOperationError,
 } from 'n8n-workflow';
@@ -22,16 +23,20 @@ export class DeepKeep implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'DeepKeep',
     name: 'deepKeep',
-    icon: 'file:deepkeep.svg',
+    icon: {
+      light: 'file:deepkeep.svg',
+      dark: 'file:deepkeep.svg',
+    },
     group: ['transform'],
     version: 1,
+    usableAsTool: true,
     subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
     description: 'Interact with the DeepKeep AI Firewall API',
     defaults: {
       name: 'DeepKeep',
     },
-    inputs: ['main'],
-    outputs: ['main'],
+    inputs: [NodeConnectionTypes.Main],
+    outputs: [NodeConnectionTypes.Main],
     credentials: [
       {
         name: 'deepKeepApi',
