@@ -26,14 +26,19 @@ Create a **DeepKeep API** credential with:
 
 | Field    | Value                                                                 |
 | -------- | --------------------------------------------------------------------- |
-| Base URL | The base URL of your DeepKeep instance, without a trailing slash.      |
+| Base URL | The base URL of your DeepKeep instance, without a trailing slash. Required for node version 2. |
+| Subdomain | Legacy field for existing node version 1 workflows. The legacy base URL is `https://api.<subdomain>.deepkeep.ai`. |
 | API Key  | Your DeepKeep API key. Sent as the `X-API-Key` header on every request. |
 
 The credential is tested against `GET /health`.
 
 ## Operations
 
-All operations live under the **Moderation** resource.
+New workflows use node version 2 by default. Existing workflows saved with node version 1 continue to use the legacy conversation API.
+
+### Version 2: Moderation
+
+Version 2 operations live under the **Moderation** resource.
 
 ### Pre moderation
 
@@ -77,14 +82,40 @@ An escape hatch that lets you call any DeepKeep endpoint with the configured cre
 
 Returns `{ statusCode, headers, body }`. `body` is parsed as JSON when possible, otherwise passed through as a string. Non-2xx responses are returned in the envelope rather than thrown.
 
+### Version 1: Firewall conversation
+
+Version 1 is retained for backwards compatibility with existing workflows. It uses the legacy **Firewall Conversation** resource and the legacy subdomain credential field.
+
+#### Check input
+
+Checks a prompt against the guardrails defined on a firewall.
+
+- **Firewall** — select from the list of firewalls in your DeepKeep workspace.
+- **Conversation ID** — existing conversation to append the check to.
+- **Content** — the text to check.
+- **Return Full Response (Enable Logs)** — whether to return all detected violations.
+
+Calls `POST /api/v2/firewalls/{firewallId}/conversation/{conversationId}/check_user_input`.
+
+#### Create conversation
+
+Starts a new conversation on a firewall.
+
+Calls `POST /api/v2/firewalls/{firewallId}/conversation`.
+
+#### Make API call
+
+Calls a path relative to the legacy API base `https://api.<subdomain>.deepkeep.ai/api`.
+
 ## Migration from 0.1.x
 
-Version 0.2.0 updates this node to the same OpenAI-compatible DeepKeep API calls used by the LangChain integration.
+Version 0.2.7 introduces light node versioning so existing workflows remain backwards compatible while new workflows use the same OpenAI-compatible DeepKeep API calls used by the LangChain integration.
 
-- Replace the old **Subdomain** credential with **Base URL**.
-- Replace legacy conversation operations with **Pre Moderation** and **Post Moderation**.
-- Use your DeepKeep firewall ID in the **Model** field.
-- The legacy `Create Conversation` operation and conversation-based `Check Input` operation are removed.
+- Existing workflows saved with node version 1 continue to use the legacy conversation API.
+- New workflows use node version 2 by default.
+- Use **Base URL** for node version 2.
+- Use your DeepKeep firewall ID in the version 2 **Model** field.
+- Version 1 is retained for compatibility only and should not be used for new workflows.
 
 ## Local development
 

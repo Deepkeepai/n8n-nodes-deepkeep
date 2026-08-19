@@ -8,10 +8,10 @@ import {
 /**
  * DeepKeep API credentials.
  *
- * Mirrors the current OpenAI-compatible DeepKeep API integrations:
- *  - Two fields: baseUrl (plain text) + apiKey (secret).
+ * Supports both legacy v1 workflows and current v2 workflows:
+ *  - subDomain is retained for saved v1 workflows.
+ *  - baseUrl is used by the current OpenAI-compatible API operations.
  *  - Auth header: X-API-Key: <apiKey> on every request.
- *  - Connection test: GET <baseUrl>/health.
  */
 export class DeepKeepApi implements ICredentialType {
   name = 'deepKeepApi';
@@ -28,10 +28,20 @@ export class DeepKeepApi implements ICredentialType {
       name: 'baseUrl',
       type: 'string',
       default: '',
-      required: true,
+      required: false,
       placeholder: 'https://api.deepkeep.example',
       description:
-        'Enter the base URL of your DeepKeep instance, without a trailing slash',
+        'Enter the base URL of your DeepKeep instance, without a trailing slash. Required for node version 2.',
+    },
+    {
+      displayName: 'Subdomain',
+      name: 'subDomain',
+      type: 'string',
+      default: '',
+      required: false,
+      placeholder: 'acme',
+      description:
+        'Legacy field for node version 1 workflows. The legacy base URL is https://api.&lt;subDomain&gt;.deepkeep.ai.',
     },
     {
       displayName: 'API Key',
@@ -63,7 +73,7 @@ export class DeepKeepApi implements ICredentialType {
    */
   test: ICredentialTestRequest = {
     request: {
-      baseURL: '={{$credentials.baseUrl}}',
+      baseURL: '={{$credentials.baseUrl || "https://api." + $credentials.subDomain + ".deepkeep.ai"}}',
       url: '/health',
       method: 'GET',
     },
