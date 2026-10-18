@@ -125,13 +125,15 @@ export class DeepKeep implements INodeType {
             name: 'Pre Moderation',
             value: 'preModeration',
             description: 'Check model input against DeepKeep guardrails',
-            action: 'Check model input against deep keep guardrails',
+            // eslint-disable-next-line n8n-nodes-base/node-param-operation-option-action-miscased -- Preserve the DeepKeep brand spelling.
+            action: 'Check model input against DeepKeep guardrails',
           },
           {
             name: 'Post Moderation',
             value: 'postModeration',
             description: 'Check model output against DeepKeep guardrails',
-            action: 'Check model output against deep keep guardrails',
+            // eslint-disable-next-line n8n-nodes-base/node-param-operation-option-action-miscased -- Preserve the DeepKeep brand spelling.
+            action: 'Check model output against DeepKeep guardrails',
           },
           {
             name: 'Make API Call',
